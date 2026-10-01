@@ -235,6 +235,13 @@ function ProductsList({ products, settings }) {
   );
 }
 
+// --- Cloud Data & Storage Integration ---
+import { 
+  subscribeProducts, saveProductToCloud, deleteProductFromCloud,
+  subscribeDailySections, saveDailySectionToCloud, deleteDailySectionFromCloud,
+  subscribeSettings, saveSettingsToCloud, processAndUploadImage 
+} from './services/stockService';
+
 // 2. Add New Product
 function AddProduct({ onAdd, settings }) {
   const navigate = useNavigate();
@@ -243,10 +250,19 @@ function AddProduct({ onAdd, settings }) {
   const [colours, setColours] = useState('');
   const [sizes, setSizes] = useState('');
   const [image, setImage] = useState(null);
+  const [uploading, setUploading] = useState(false);
   
-  const handleImage = (e) => {
+  const handleImage = async (e) => {
     if (e.target.files[0]) {
-      setImage(URL.createObjectURL(e.target.files[0]));
+      setUploading(true);
+      try {
+        const cloudUrl = await processAndUploadImage(e.target.files[0]);
+        setImage(cloudUrl);
+      } catch (err) {
+        console.error("Image upload failed:", err);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -300,13 +316,15 @@ function AddProduct({ onAdd, settings }) {
           </div>
           <div className="form-group">
             <label>Base Group Picture (Optional)</label>
-            {image ? (
+            {uploading ? (
+              <p style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading picture to cloud...</p>
+            ) : image ? (
               <img src={image} alt="preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', display: 'block', marginBottom: '10px' }}/>
             ) : (
               <input type="file" className="form-control" accept="image/*" onChange={handleImage} />
             )}
           </div>
-          <button type="submit" className="btn btn-primary">Save Product</button>
+          <button type="submit" className="btn btn-primary" disabled={uploading}>Save Product</button>
         </form>
       </div>
     </div>
@@ -319,35 +337,44 @@ function ProductUpdate({ products, updateProduct, settings }) {
   const navigate = useNavigate();
   const product = products.find(p => p.id === id);
   const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
 
   if (!product) return <div className="page-body">Product not found.</div>;
 
-  const [activeTab, setActiveTab] = useState(product.sizesList[0] || 'Default');
+  const [activeTab, setActiveTab] = useState(product.sizesList?.[0] || 'Default');
 
   // Helper to get active stock data
-  const currentData = product.stockData[activeTab] || { markers: [], image: product.image };
+  const currentData = product.stockData?.[activeTab] || { markers: [], image: product.image };
 
   const handleSaveData = (newData) => {
     updateProduct(id, {
       stockData: {
-        ...product.stockData,
+        ...(product.stockData || {}),
         [activeTab]: newData
       }
     });
   };
 
   const handleSaveClick = () => {
-    alert(`Stock updated successfully for ${activeTab}!`);
+    alert(`Stock updated and synced to central cloud for ${activeTab}!`);
   };
 
-  const handleImgUpload = (e) => {
-    if(e.target.files[0]) {
-      handleSaveData({
-        ...currentData,
-        image: URL.createObjectURL(e.target.files[0])
-      });
+  const handleImgUpload = async (e) => {
+    if (e.target.files[0]) {
+      setUploading(true);
+      try {
+        const cloudUrl = await processAndUploadImage(e.target.files[0]);
+        handleSaveData({
+          ...currentData,
+          image: cloudUrl
+        });
+      } catch (err) {
+        console.error("Cloud image upload failed:", err);
+      } finally {
+        setUploading(false);
+      }
     }
-  }
+  };
 
   return (
     <div className="page-body" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -364,7 +391,7 @@ function ProductUpdate({ products, updateProduct, settings }) {
       
       {/* Tabs for Sizes */}
       <div className="tabs">
-        {product.sizesList.map(size => (
+        {(product.sizesList || ['Default']).map(size => (
           <div 
             key={size} 
             className={`tab-item ${activeTab === size ? 'active' : ''}`}
@@ -376,7 +403,9 @@ function ProductUpdate({ products, updateProduct, settings }) {
       </div>
 
       <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'flex-end' }}>
-        {!currentData.image && (
+        {uploading ? (
+          <span style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading image...</span>
+        ) : !currentData.image && (
           <div>
             <input type="file" ref={fileRef} style={{ display: 'none' }} accept="image/*" onChange={handleImgUpload} />
             <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Size Specific Image</button>
@@ -452,18 +481,26 @@ function DailyUpdateDetail({ sections, updateSection, settings }) {
   const navigate = useNavigate();
   const section = sections.find(s => s.id === id);
   const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
 
   if (!section) return <div className="page-body">Section not found.</div>;
 
   const handleSave = () => {
-    alert(`Saved daily update for ${section.title}`);
+    alert(`Saved daily update for ${section.title} to central cloud!`);
     navigate('/daily-updates');
   };
 
-  const handleImgUpload = (e) => {
-    if(e.target.files[0]) {
-      const url = URL.createObjectURL(e.target.files[0]);
-      updateSection(id, { image: url });
+  const handleImgUpload = async (e) => {
+    if (e.target.files[0]) {
+      setUploading(true);
+      try {
+        const cloudUrl = await processAndUploadImage(e.target.files[0]);
+        updateSection(id, { image: cloudUrl });
+      } catch (err) {
+        console.error("Cloud image upload failed:", err);
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -477,7 +514,9 @@ function DailyUpdateDetail({ sections, updateSection, settings }) {
             {section.title}
           </h2>
         </div>
-        {!section.image && (
+        {uploading ? (
+          <span style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading image...</span>
+        ) : !section.image && (
           <div>
             <input type="file" ref={fileRef} style={{ display: 'none' }} accept="image/*" onChange={handleImgUpload} />
             <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Image</button>
@@ -493,7 +532,7 @@ function DailyUpdateDetail({ sections, updateSection, settings }) {
           onSave={handleSave}
           title={section.title}
           markerStyle={settings.markerStyle}
-          availableColours={[]} // No predefined colours for daily sections
+          availableColours={[]} 
         />
       </div>
     </div>
@@ -602,7 +641,7 @@ const XIcon = () => (
 // --- Main App Shell ---
 export default function App() {
   const [settings, setSettings] = useState({
-    markerStyle: 'ticks', // 'numbers' or 'ticks'
+    markerStyle: 'ticks',
     productTypes: ['Joggers', 'Polos', 'T-Shirts', 'Shorts', 'Jeans', 'Accessories']
   });
 
@@ -616,18 +655,76 @@ export default function App() {
       sizes: 'M, L, XL', 
       sizesList: ['M', 'L', 'XL'],
       image: null, 
-      stockData: {} // e.g. { 'M': { image: null, markers: [] }, 'L': ... }
+      stockData: {} 
     }
   ]);
   const [dailySections, setDailySections] = useState([
     { id: '1001', title: 'M size polos', image: null, markers: [] }
   ]);
 
-  const addProduct = (prod) => setProducts([...products, prod]);
-  const updateProduct = (id, data) => setProducts(products.map(p => p.id === id ? { ...p, ...data } : p));
+  // Real-time Central Cloud Subscriptions
+  useEffect(() => {
+    const unsubProducts = subscribeProducts((cloudProducts) => {
+      if (cloudProducts && cloudProducts.length > 0) {
+        setProducts(cloudProducts);
+      }
+    });
 
-  const addDailySection = (title) => setDailySections([{ id: uuidv4(), title, image: null, markers: [] }, ...dailySections]);
-  const updateDailySection = (id, data) => setDailySections(dailySections.map(s => s.id === id ? { ...s, ...data } : s));
+    const unsubDaily = subscribeDailySections((cloudSections) => {
+      if (cloudSections && cloudSections.length > 0) {
+        setDailySections(cloudSections);
+      }
+    });
+
+    const unsubSettings = subscribeSettings((cloudSettings) => {
+      if (cloudSettings) {
+        setSettings(prev => ({ ...prev, ...cloudSettings }));
+      }
+    });
+
+    return () => {
+      unsubProducts();
+      unsubDaily();
+      unsubSettings();
+    };
+  }, []);
+
+  const addProduct = (prod) => {
+    setProducts(prev => [...prev, prod]);
+    saveProductToCloud(prod);
+  };
+
+  const updateProduct = (id, data) => {
+    setProducts(prev => {
+      const updated = prev.map(p => p.id === id ? { ...p, ...data } : p);
+      const target = updated.find(p => p.id === id);
+      if (target) saveProductToCloud(target);
+      return updated;
+    });
+  };
+
+  const addDailySection = (title) => {
+    const newSection = { id: uuidv4(), title, image: null, markers: [] };
+    setDailySections(prev => [newSection, ...prev]);
+    saveDailySectionToCloud(newSection);
+  };
+
+  const updateDailySection = (id, data) => {
+    setDailySections(prev => {
+      const updated = prev.map(s => s.id === id ? { ...s, ...data } : s);
+      const target = updated.find(s => s.id === id);
+      if (target) saveDailySectionToCloud(target);
+      return updated;
+    });
+  };
+
+  const updateSettings = (newSettings) => {
+    setSettings(prev => {
+      const updated = { ...prev, ...newSettings };
+      saveSettingsToCloud(updated);
+      return updated;
+    });
+  };
 
   return (
     <Router>
@@ -656,7 +753,7 @@ export default function App() {
             <Route path="/daily-updates" element={<DailyUpdatesList sections={dailySections} addSection={addDailySection} />} />
             <Route path="/daily-updates/:id" element={<DailyUpdateDetail sections={dailySections} updateSection={updateDailySection} settings={settings} />} />
             
-            <Route path="/settings" element={<SettingsPage settings={settings} updateSettings={(newSettings) => setSettings({...settings, ...newSettings})} />} />
+            <Route path="/settings" element={<SettingsPage settings={settings} updateSettings={updateSettings} />} />
           </Routes>
         </main>
       </div>
@@ -673,3 +770,4 @@ function NavLink({ to, icon, children }) {
     </Link>
   );
 }
+
