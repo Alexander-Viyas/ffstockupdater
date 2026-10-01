@@ -197,13 +197,23 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
 // --- Pages ---
 
 // 1. Dashboard / Products List
-function ProductsList({ products, settings }) {
+function ProductsList({ products, settings, deleteProduct }) {
   const navigate = useNavigate();
+  const [isDeleteMode, setIsDeleteMode] = useState(false);
   return (
     <div className="page-body">
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
         <h2>All Products</h2>
-        <Link to="/add-product" className="btn btn-primary"><Plus size={18}/> Add Product</Link>
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            className="btn btn-outline" 
+            style={{ color: isDeleteMode ? 'var(--text)' : 'var(--danger)', borderColor: isDeleteMode ? 'var(--border)' : 'var(--danger)' }} 
+            onClick={() => setIsDeleteMode(!isDeleteMode)}
+          >
+            {isDeleteMode ? 'Done' : <><Trash2 size={16}/> Delete</>}
+          </button>
+          <Link to="/add-product" className="btn btn-primary"><Plus size={18}/> Add Product</Link>
+        </div>
       </div>
       <div className="grid-3">
         {products.map(p => {
@@ -213,7 +223,19 @@ function ProductsList({ products, settings }) {
           }, 0);
 
           return (
-            <div key={p.id} className="card card-clickable" onClick={() => navigate(`/product/${p.id}`)}>
+            <div key={p.id} className="card card-clickable" style={{ position: 'relative' }} onClick={() => navigate(`/product/${p.id}`)}>
+              {isDeleteMode && (
+                <button 
+                  className="btn" 
+                  style={{ position: 'absolute', top: '10px', right: '10px', background: 'white', color: 'var(--danger)', padding: '8px', borderRadius: '50%', zIndex: 10, boxShadow: 'var(--shadow)', border: '1px solid var(--danger)' }}
+                  onClick={(e) => {
+                     e.stopPropagation();
+                     deleteProduct(p.id);
+                  }}
+                >
+                  <Trash2 size={18} />
+                </button>
+              )}
               {p.image ? (
                 <img src={p.image} alt={p.name} className="product-thumbnail" />
               ) : (
@@ -336,7 +358,7 @@ function AddProduct({ onAdd, settings }) {
 }
 
 // 3. Product Update Section
-function ProductUpdate({ products, updateProduct, settings }) {
+function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
   const { id } = useParams();
   const navigate = useNavigate();
   const product = products.find(p => p.id === id);
@@ -357,6 +379,32 @@ function ProductUpdate({ products, updateProduct, settings }) {
         [activeTab]: newData
       }
     });
+  };
+
+  const handleDeleteProduct = () => {
+    if (window.confirm("Are you sure you want to completely delete this product?")) {
+      deleteProduct(id);
+      navigate('/');
+    }
+  };
+
+  const handleDeleteSize = (sizeToDelete, e) => {
+    e.stopPropagation();
+    if (window.confirm(`Are you sure you want to delete size ${sizeToDelete}?`)) {
+      const newSizesList = product.sizesList.filter(s => s !== sizeToDelete);
+      const newStockData = { ...product.stockData };
+      delete newStockData[sizeToDelete];
+      
+      updateProduct(id, {
+        sizesList: newSizesList,
+        sizes: newSizesList.join(', '),
+        stockData: newStockData
+      });
+      
+      if (activeTab === sizeToDelete) {
+        setActiveTab(newSizesList[0] || 'Default');
+      }
+    }
   };
 
   const handleSaveClick = () => {
@@ -380,9 +428,15 @@ function ProductUpdate({ products, updateProduct, settings }) {
     }
   };
 
+  const handleRemoveImage = () => {
+    if (window.confirm("Remove this image?")) {
+      handleSaveData({ ...currentData, image: null });
+    }
+  };
+
   return (
     <div className="page-body" style={{ display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
         <div>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
             <span style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => navigate('/')}>Products</span> 
@@ -391,6 +445,9 @@ function ProductUpdate({ products, updateProduct, settings }) {
           </h2>
           <p style={{ color: 'var(--text-muted)' }}>Select a size tab below to update its specific stock.</p>
         </div>
+        <button className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleDeleteProduct}>
+          <Trash2 size={16}/> Delete Product
+        </button>
       </div>
       
       {/* Tabs for Sizes */}
@@ -400,20 +457,30 @@ function ProductUpdate({ products, updateProduct, settings }) {
             key={size} 
             className={`tab-item ${activeTab === size ? 'active' : ''}`}
             onClick={() => setActiveTab(size)}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             Size: {size}
+            <button 
+              style={{ background: 'none', border: 'none', color: activeTab === size ? 'white' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
+              onClick={(e) => handleDeleteSize(size, e)}
+            >
+              <X size={14} />
+            </button>
           </div>
         ))}
       </div>
 
-      <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
+        <input type="file" ref={fileRef} style={{ display: 'none' }} accept="image/*" onChange={handleImgUpload} />
         {uploading ? (
           <span style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading image...</span>
-        ) : !currentData.image && (
-          <div>
-            <input type="file" ref={fileRef} style={{ display: 'none' }} accept="image/*" onChange={handleImgUpload} />
-            <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Size Specific Image</button>
-          </div>
+        ) : !currentData.image ? (
+          <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Size Specific Image</button>
+        ) : (
+          <>
+            <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><ImageIcon size={16}/> Change Image</button>
+            <button className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleRemoveImage}><Trash2 size={16}/> Remove Image</button>
+          </>
         )}
       </div>
 
@@ -700,6 +767,13 @@ export default function App() {
     saveProductToCloud(prod);
   };
 
+  const deleteProduct = (id) => {
+    if (window.confirm("Are you sure you want to completely delete this product?")) {
+      setProducts(prev => prev.filter(p => p.id !== id));
+      deleteProductFromCloud(id);
+    }
+  };
+
   const updateProduct = (id, data) => {
     setProducts(prev => {
       const updated = prev.map(p => p.id === id ? { ...p, ...data } : p);
@@ -788,9 +862,9 @@ export default function App() {
             </div>
           ) : (
             <Routes>
-              <Route path="/" element={<ProductsList products={products} settings={settings} />} />
+              <Route path="/" element={<ProductsList products={products} settings={settings} deleteProduct={deleteProduct} />} />
               <Route path="/add-product" element={<AddProduct onAdd={addProduct} settings={settings} />} />
-              <Route path="/product/:id" element={<ProductUpdate products={products} updateProduct={updateProduct} settings={settings} />} />
+              <Route path="/product/:id" element={<ProductUpdate products={products} updateProduct={updateProduct} settings={settings} deleteProduct={deleteProduct} />} />
               
               <Route path="/daily-updates" element={<DailyUpdatesList sections={dailySections} addSection={addDailySection} />} />
               <Route path="/daily-updates/:id" element={<DailyUpdateDetail sections={dailySections} updateSection={updateDailySection} settings={settings} />} />
