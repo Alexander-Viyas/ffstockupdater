@@ -1,0 +1,675 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, useLocation } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Package, PlusSquare, Calendar, Settings as SettingsIcon, Upload, Check, Plus, Minus, Trash2, Image as ImageIcon, ChevronRight 
+} from 'lucide-react';
+
+// --- Reusable Ticker Interface ---
+function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyle, availableColours }) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [currentClick, setCurrentClick] = useState(null);
+  
+  // Custom variant toggle
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customVariantName, setCustomVariantName] = useState('');
+  
+  const imageRef = useRef(null);
+
+  const handleImageClick = (e) => {
+    if (e.target.closest('.marker')) return;
+    if (!imageRef.current) return;
+    
+    const rect = imageRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+    setCurrentClick({ x, y });
+    
+    // Reset modal state
+    setCustomVariantName('');
+    setShowCustomInput(!availableColours || availableColours.length === 0);
+    setIsModalOpen(true);
+  };
+
+  const handleAddPredefinedVariant = (colour) => {
+    setMarkers([...markers, { id: uuidv4(), name: colour, qty: 1, x: currentClick.x, y: currentClick.y }]);
+    setIsModalOpen(false);
+  };
+
+  const handleAddCustomVariant = (e) => {
+    e.preventDefault();
+    if (!customVariantName.trim()) return;
+    setMarkers([...markers, { id: uuidv4(), name: customVariantName, qty: 1, x: currentClick.x, y: currentClick.y }]);
+    setIsModalOpen(false);
+  };
+
+  const handleIncrement = (id, e) => {
+    if (e) e.stopPropagation();
+    setMarkers(markers.map(m => m.id === id ? { ...m, qty: m.qty + 1 } : m));
+  };
+
+  const handleDecrement = (id) => {
+    setMarkers(markers.map(m => m.id === id && m.qty > 0 ? { ...m, qty: m.qty - 1 } : m));
+  };
+
+  const handleDelete = (id) => {
+    setMarkers(markers.filter(m => m.id !== id));
+  };
+
+  const total = markers.reduce((sum, m) => sum + m.qty, 0);
+
+  return (
+    <div className="ticker-workspace">
+      <div className="image-area">
+        {!image ? (
+          <div style={{ color: 'var(--text-muted)' }}>No image provided</div>
+        ) : (
+          <>
+            <img 
+              ref={imageRef} 
+              src={image} 
+              alt="Group" 
+              onClick={handleImageClick}
+              draggable="false"
+            />
+            <AnimatePresence>
+              {markers.map(marker => (
+                <motion.div
+                  key={marker.id}
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  exit={{ scale: 0 }}
+                  className="marker"
+                  style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
+                  onClick={(e) => handleIncrement(marker.id, e)}
+                  title="Click to add +1"
+                >
+                  <div className="marker-pin">
+                    {markerStyle === 'numbers' ? marker.qty : <Check size={20} />}
+                  </div>
+                  <div className="marker-tooltip">
+                    {marker.name} • Qty: {marker.qty}
+                  </div>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </>
+        )}
+      </div>
+
+      <div className="side-panel">
+        <div className="panel-header">
+          <span>{title || 'Variants'}</span>
+          <span className="badge">Total: {total}</span>
+        </div>
+        <div className="panel-body">
+          {markers.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '20px' }}>
+              <p>Click on the image to add variants.</p>
+            </div>
+          ) : (
+            markers.map(marker => (
+              <div key={marker.id} className="variant-item">
+                <div className="variant-info">
+                  <span className="variant-name">{marker.name}</span>
+                  <span className="variant-qty">Qty: {marker.qty}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button onClick={() => handleDecrement(marker.id)} style={{ padding: '4px', cursor: 'pointer' }}><Minus size={14}/></button>
+                  <span>{marker.qty}</span>
+                  <button onClick={(e) => handleIncrement(marker.id, e)} style={{ padding: '4px', cursor: 'pointer' }}><Plus size={14}/></button>
+                  <button onClick={() => handleDelete(marker.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', marginLeft: '10px' }}>
+                    <Trash2 size={16}/>
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div style={{ padding: '20px', borderTop: '1px solid var(--border)' }}>
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={onSave}>
+            Save Changes
+          </button>
+        </div>
+      </div>
+
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
+          <div className="modal-content">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3>Select Variant</h3>
+              <button className="btn-outline" style={{ padding: '4px 8px', border: 'none' }} onClick={() => setIsModalOpen(false)}>✕</button>
+            </div>
+            
+            {availableColours && availableColours.length > 0 && !showCustomInput && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Choose a pre-defined colour:</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  {availableColours.map(c => (
+                    <button key={c} type="button" className="btn btn-outline" onClick={() => handleAddPredefinedVariant(c)}>
+                      {c}
+                    </button>
+                  ))}
+                </div>
+                
+                <div style={{ margin: '15px 0', borderTop: '1px solid var(--border)' }}></div>
+                
+                <button type="button" className="btn btn-secondary" style={{ width: '100%', background: 'transparent', border: '1px dashed var(--accent)', color: 'var(--accent)' }} onClick={() => setShowCustomInput(true)}>
+                  + Add Custom Variant
+                </button>
+              </div>
+            )}
+
+            {showCustomInput && (
+              <form onSubmit={handleAddCustomVariant}>
+                <div className="form-group">
+                  <label>Variant Name</label>
+                  <input 
+                    type="text" 
+                    className="form-control"
+                    value={customVariantName}
+                    onChange={(e) => setCustomVariantName(e.target.value)}
+                    autoFocus
+                    placeholder="e.g. Special Blue"
+                  />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  {availableColours && availableColours.length > 0 && (
+                    <button type="button" className="btn btn-outline" onClick={() => setShowCustomInput(false)}>Back</button>
+                  )}
+                  <button type="submit" className="btn btn-primary">Add</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// --- Pages ---
+
+// 1. Dashboard / Products List
+function ProductsList({ products, settings }) {
+  const navigate = useNavigate();
+  return (
+    <div className="page-body">
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+        <h2>All Products</h2>
+        <Link to="/add-product" className="btn btn-primary"><Plus size={18}/> Add Product</Link>
+      </div>
+      <div className="grid-3">
+        {products.map(p => {
+          const totalStock = p.sizesList.reduce((sum, size) => {
+            const markers = p.stockData[size]?.markers || [];
+            return sum + markers.reduce((acc, m) => acc + m.qty, 0);
+          }, 0);
+
+          return (
+            <div key={p.id} className="card card-clickable" onClick={() => navigate(`/product/${p.id}`)}>
+              {p.image ? (
+                <img src={p.image} alt={p.name} className="product-thumbnail" />
+              ) : (
+                <div className="product-thumbnail">
+                  <ImageIcon size={48} opacity={0.5} />
+                </div>
+              )}
+              <h3 style={{ marginBottom: '10px' }}>{p.name}</h3>
+              {p.type && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '4px' }}>Type: {p.type}</p>}
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{p.colours} colours, {p.sizes}</p>
+              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span className="badge">{totalStock} in stock</span>
+                <span style={{ color: 'var(--accent)' }}><ChevronRight size={20}/></span>
+              </div>
+            </div>
+          );
+        })}
+        {products.length === 0 && (
+          <p style={{ color: 'var(--text-muted)' }}>No products yet. Add a new product to get started.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// 2. Add New Product
+function AddProduct({ onAdd, settings }) {
+  const navigate = useNavigate();
+  const [name, setName] = useState('');
+  const [type, setType] = useState(settings.productTypes[0] || 'Joggers');
+  const [colours, setColours] = useState('');
+  const [sizes, setSizes] = useState('');
+  const [image, setImage] = useState(null);
+  
+  const handleImage = (e) => {
+    if (e.target.files[0]) {
+      setImage(URL.createObjectURL(e.target.files[0]));
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const sizesList = sizes.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    const coloursList = colours.split(',').map(c => c.trim()).filter(c => c.length > 0);
+    
+    if (sizesList.length === 0) sizesList.push('Default');
+
+    onAdd({ 
+      id: uuidv4(), 
+      name, 
+      type, 
+      colours: coloursList.join(', '), 
+      coloursList,
+      sizes: sizesList.join(', '), 
+      sizesList,
+      image, 
+      stockData: {} 
+    });
+    navigate('/');
+  };
+
+  return (
+    <div className="page-body">
+      <h2>Add New Product</h2>
+      <br/>
+      <div className="card" style={{ maxWidth: '600px' }}>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Product Name</label>
+            <input type="text" className="form-control" required value={name} onChange={e=>setName(e.target.value)}/>
+          </div>
+          <div className="form-group">
+            <label>Product Type</label>
+            <select className="form-control" value={type} onChange={e=>setType(e.target.value)}>
+              {settings.productTypes.map(t => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>Manage product types in Settings.</p>
+          </div>
+          <div className="form-group">
+            <label>Available Colours (comma separated)</label>
+            <input type="text" className="form-control" value={colours} onChange={e=>setColours(e.target.value)} placeholder="e.g. Red, Blue, Green"/>
+          </div>
+          <div className="form-group">
+            <label>Available Sizes (comma separated)</label>
+            <input type="text" className="form-control" required value={sizes} onChange={e=>setSizes(e.target.value)} placeholder="e.g. S, M, L, XL"/>
+          </div>
+          <div className="form-group">
+            <label>Base Group Picture (Optional)</label>
+            {image ? (
+              <img src={image} alt="preview" style={{ width: '100px', height: '100px', objectFit: 'cover', borderRadius: '8px', display: 'block', marginBottom: '10px' }}/>
+            ) : (
+              <input type="file" className="form-control" accept="image/*" onChange={handleImage} />
+            )}
+          </div>
+          <button type="submit" className="btn btn-primary">Save Product</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// 3. Product Update Section
+function ProductUpdate({ products, updateProduct, settings }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const product = products.find(p => p.id === id);
+  const fileRef = useRef(null);
+
+  if (!product) return <div className="page-body">Product not found.</div>;
+
+  const [activeTab, setActiveTab] = useState(product.sizesList[0] || 'Default');
+
+  // Helper to get active stock data
+  const currentData = product.stockData[activeTab] || { markers: [], image: product.image };
+
+  const handleSaveData = (newData) => {
+    updateProduct(id, {
+      stockData: {
+        ...product.stockData,
+        [activeTab]: newData
+      }
+    });
+  };
+
+  const handleSaveClick = () => {
+    alert(`Stock updated successfully for ${activeTab}!`);
+  };
+
+  const handleImgUpload = (e) => {
+    if(e.target.files[0]) {
+      handleSaveData({
+        ...currentData,
+        image: URL.createObjectURL(e.target.files[0])
+      });
+    }
+  }
+
+  return (
+    <div className="page-body" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+        <div>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
+            <span style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => navigate('/')}>Products</span> 
+            <ChevronRight size={16}/> 
+            {product.name}
+          </h2>
+          <p style={{ color: 'var(--text-muted)' }}>Select a size tab below to update its specific stock.</p>
+        </div>
+      </div>
+      
+      {/* Tabs for Sizes */}
+      <div className="tabs">
+        {product.sizesList.map(size => (
+          <div 
+            key={size} 
+            className={`tab-item ${activeTab === size ? 'active' : ''}`}
+            onClick={() => setActiveTab(size)}
+          >
+            Size: {size}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'flex-end' }}>
+        {!currentData.image && (
+          <div>
+            <input type="file" ref={fileRef} style={{ display: 'none' }} accept="image/*" onChange={handleImgUpload} />
+            <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Size Specific Image</button>
+          </div>
+        )}
+      </div>
+
+      <TickerInterface 
+        key={activeTab}
+        image={currentData.image} 
+        markers={currentData.markers || []} 
+        setMarkers={(m) => handleSaveData({ ...currentData, markers: m })} 
+        onSave={handleSaveClick} 
+        title={`${activeTab} Variants`}
+        markerStyle={settings.markerStyle}
+        availableColours={product.coloursList}
+      />
+    </div>
+  );
+}
+
+// 4. Daily Updates (List)
+function DailyUpdatesList({ sections, addSection }) {
+  const navigate = useNavigate();
+  const [newTitle, setNewTitle] = useState('');
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if(!newTitle.trim()) return;
+    addSection(newTitle);
+    setNewTitle('');
+  };
+
+  return (
+    <div className="page-body">
+      <h2>Daily Updates</h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '20px' }}>Manage your daily stock check sections here.</p>
+      
+      <div className="card" style={{ marginBottom: '30px', maxWidth: '600px' }}>
+        <form onSubmit={handleAdd} style={{ display: 'flex', gap: '10px' }}>
+          <input 
+            type="text" 
+            className="form-control" 
+            placeholder="New section name (e.g. XXL Polos)..." 
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary">Add Section</button>
+        </form>
+      </div>
+
+      <div className="grid-3">
+        {sections.map(section => (
+          <div key={section.id} className="card card-clickable" onClick={() => navigate(`/daily-updates/${section.id}`)}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '1.2rem' }}>{section.title}</h3>
+              <ChevronRight size={20} color="var(--accent)" />
+            </div>
+            <p style={{ color: 'var(--text-muted)', marginTop: '10px' }}>
+              {section.markers?.length || 0} variants logged
+            </p>
+          </div>
+        ))}
+      </div>
+      {sections.length === 0 && <p style={{ color: 'var(--text-muted)' }}>No daily updates added yet.</p>}
+    </div>
+  );
+}
+
+// 5. Daily Update Subpage (Detail)
+function DailyUpdateDetail({ sections, updateSection, settings }) {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const section = sections.find(s => s.id === id);
+  const fileRef = useRef(null);
+
+  if (!section) return <div className="page-body">Section not found.</div>;
+
+  const handleSave = () => {
+    alert(`Saved daily update for ${section.title}`);
+    navigate('/daily-updates');
+  };
+
+  const handleImgUpload = (e) => {
+    if(e.target.files[0]) {
+      const url = URL.createObjectURL(e.target.files[0]);
+      updateSection(id, { image: url });
+    }
+  };
+
+  return (
+    <div className="page-body" style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => navigate('/daily-updates')}>Daily Updates</span> 
+            <ChevronRight size={16}/> 
+            {section.title}
+          </h2>
+        </div>
+        {!section.image && (
+          <div>
+            <input type="file" ref={fileRef} style={{ display: 'none' }} accept="image/*" onChange={handleImgUpload} />
+            <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Image</button>
+          </div>
+        )}
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        <TickerInterface 
+          image={section.image}
+          markers={section.markers || []}
+          setMarkers={(m) => updateSection(id, { markers: m })}
+          onSave={handleSave}
+          title={section.title}
+          markerStyle={settings.markerStyle}
+          availableColours={[]} // No predefined colours for daily sections
+        />
+      </div>
+    </div>
+  );
+}
+
+// 6. Settings Page
+function SettingsPage({ settings, updateSettings }) {
+  const [newType, setNewType] = useState('');
+
+  const handleAddType = (e) => {
+    e.preventDefault();
+    if(newType.trim() && !settings.productTypes.includes(newType.trim())) {
+      updateSettings({ productTypes: [...settings.productTypes, newType.trim()] });
+      setNewType('');
+    }
+  };
+
+  const handleRemoveType = (type) => {
+    updateSettings({ productTypes: settings.productTypes.filter(t => t !== type) });
+  };
+
+  return (
+    <div className="page-body">
+      <h2>Settings</h2>
+      <p style={{ color: 'var(--text-muted)', marginBottom: '30px' }}>Manage application preferences here.</p>
+      
+      <div className="card" style={{ maxWidth: '600px', marginBottom: '20px' }}>
+        <h3 style={{ marginBottom: '20px' }}>Product Types</h3>
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '15px' }}>
+          Add or remove categories available when adding a new product.
+        </p>
+        
+        <form onSubmit={handleAddType} style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+          <input 
+            type="text" 
+            className="form-control"
+            placeholder="New type (e.g. Hoodies)..."
+            value={newType}
+            onChange={(e) => setNewType(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary">Add</button>
+        </form>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          {settings.productTypes.map(t => (
+            <div key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#f1f5f9', padding: '6px 12px', borderRadius: '20px', fontSize: '0.9rem' }}>
+              {t}
+              <button onClick={() => handleRemoveType(t)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', alignItems: 'center' }}>
+                <XIcon />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="card" style={{ maxWidth: '600px' }}>
+        <h3 style={{ marginBottom: '20px' }}>Visual Settings</h3>
+        
+        <div className="form-group">
+          <label>Marker Display Style</label>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '10px' }}>
+            Choose whether to show numbers or visual tick marks on the product images when you click.
+          </p>
+          <div style={{ display: 'flex', gap: '15px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'normal' }}>
+              <input 
+                type="radio" 
+                name="markerStyle" 
+                value="numbers" 
+                checked={settings.markerStyle === 'numbers'}
+                onChange={() => updateSettings({ markerStyle: 'numbers' })}
+              />
+              Number Marks (1, 2, 3...)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'normal' }}>
+              <input 
+                type="radio" 
+                name="markerStyle" 
+                value="ticks" 
+                checked={settings.markerStyle === 'ticks'}
+                onChange={() => updateSettings({ markerStyle: 'ticks' })}
+              />
+              Tick Marks (✔️)
+            </label>
+          </div>
+        </div>
+
+        <hr style={{ margin: '30px 0', borderColor: 'var(--border)' }} />
+
+        <h3 style={{ marginBottom: '20px' }}>Data Management</h3>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '15px' }}>Download all your stock information as a CSV file.</p>
+        <button className="btn btn-outline" onClick={() => alert('Exporting data... (Demo)')}>Export to CSV</button>
+      </div>
+    </div>
+  );
+}
+
+// Simple internal icon for X
+const XIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+  </svg>
+);
+
+// --- Main App Shell ---
+export default function App() {
+  const [settings, setSettings] = useState({
+    markerStyle: 'ticks', // 'numbers' or 'ticks'
+    productTypes: ['Joggers', 'Polos', 'T-Shirts', 'Shorts', 'Jeans', 'Accessories']
+  });
+
+  const [products, setProducts] = useState([
+    { 
+      id: '1', 
+      name: 'Nike Joggers Summer 2026', 
+      type: 'Joggers', 
+      colours: 'Black, Grey, Olive',
+      coloursList: ['Black', 'Grey', 'Olive'], 
+      sizes: 'M, L, XL', 
+      sizesList: ['M', 'L', 'XL'],
+      image: null, 
+      stockData: {} // e.g. { 'M': { image: null, markers: [] }, 'L': ... }
+    }
+  ]);
+  const [dailySections, setDailySections] = useState([
+    { id: '1001', title: 'M size polos', image: null, markers: [] }
+  ]);
+
+  const addProduct = (prod) => setProducts([...products, prod]);
+  const updateProduct = (id, data) => setProducts(products.map(p => p.id === id ? { ...p, ...data } : p));
+
+  const addDailySection = (title) => setDailySections([{ id: uuidv4(), title, image: null, markers: [] }, ...dailySections]);
+  const updateDailySection = (id, data) => setDailySections(dailySections.map(s => s.id === id ? { ...s, ...data } : s));
+
+  return (
+    <Router>
+      <div className="app-layout">
+        {/* Navigation Sidebar */}
+        <nav className="app-nav">
+          <div className="nav-brand">FashionFusion</div>
+          <div className="nav-links">
+            <NavLink to="/" icon={<Package size={18}/>}>Products List</NavLink>
+            <NavLink to="/add-product" icon={<PlusSquare size={18}/>}>Add Product</NavLink>
+            <NavLink to="/daily-updates" icon={<Calendar size={18}/>}>Daily Updates</NavLink>
+          </div>
+          
+          <div className="nav-links" style={{ flex: 'none', marginTop: 'auto' }}>
+            <NavLink to="/settings" icon={<SettingsIcon size={18}/>}>Settings</NavLink>
+          </div>
+        </nav>
+
+        {/* Content Area */}
+        <main className="app-content">
+          <Routes>
+            <Route path="/" element={<ProductsList products={products} settings={settings} />} />
+            <Route path="/add-product" element={<AddProduct onAdd={addProduct} settings={settings} />} />
+            <Route path="/product/:id" element={<ProductUpdate products={products} updateProduct={updateProduct} settings={settings} />} />
+            
+            <Route path="/daily-updates" element={<DailyUpdatesList sections={dailySections} addSection={addDailySection} />} />
+            <Route path="/daily-updates/:id" element={<DailyUpdateDetail sections={dailySections} updateSection={updateDailySection} settings={settings} />} />
+            
+            <Route path="/settings" element={<SettingsPage settings={settings} updateSettings={(newSettings) => setSettings({...settings, ...newSettings})} />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
+  );
+}
+
+function NavLink({ to, icon, children }) {
+  const location = useLocation();
+  const isActive = location.pathname === to || (to === '/' && location.pathname.startsWith('/product/')) || (to === '/daily-updates' && location.pathname.startsWith('/daily-updates/'));
+  return (
+    <Link to={to} className={`nav-link ${isActive ? 'active' : ''}`}>
+      {icon} {children}
+    </Link>
+  );
+}
