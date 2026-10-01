@@ -1,34 +1,45 @@
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 import { 
   collection, doc, onSnapshot, setDoc, updateDoc, deleteDoc, getDocs 
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-// Utility to convert File to Data URL / Base64 for instant cross-device sync & preview
-export const fileToDataUrl = (file) => {
+
+// Fast local image compressor using Canvas — no network upload, instant results
+// Resizes to max 600px and compresses to JPEG quality 0.7 (~20-50KB typically)
+export const processAndUploadImage = (file) => {
+  if (!file) return Promise.resolve(null);
+
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = (error) => reject(error);
-    reader.readAsDataURL(file);
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl); // free memory
+
+      const MAX_SIZE = 600; // max width or height in pixels
+      let { width, height } = img;
+
+      // Scale down proportionally if larger than MAX_SIZE
+      if (width > height) {
+        if (width > MAX_SIZE) { height = Math.round(height * MAX_SIZE / width); width = MAX_SIZE; }
+      } else {
+        if (height > MAX_SIZE) { width = Math.round(width * MAX_SIZE / height); height = MAX_SIZE; }
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // Compress to JPEG at 70% quality — fast & small enough for Firestore
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+      resolve(compressedDataUrl);
+    };
+
+    img.onerror = reject;
+    img.src = objectUrl;
   });
-};
-
-// Helper for uploading image (uses Firebase Storage if configured, or Data URL fallback)
-export const processAndUploadImage = async (file) => {
-  if (!file) return null;
-
-  try {
-    // Attempt Firebase Storage upload
-    const storageRef = ref(storage, `stock_images/${Date.now()}_${file.name}`);
-    const snapshot = await uploadBytes(storageRef, file);
-    const url = await getDownloadURL(snapshot.ref);
-    return url;
-  } catch (err) {
-    console.warn('Firebase Storage not configured or failed, falling back to compressed Data URL:', err);
-    // Fallback: Read as Data URL so image is stored centrally in Firestore document
-    return await fileToDataUrl(file);
-  }
 };
 
 // --- Products Real-Time Subscriptions & Operations ---
