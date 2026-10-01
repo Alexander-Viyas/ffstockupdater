@@ -649,49 +649,50 @@ export default function App() {
     productTypes: ['Joggers', 'Polos', 'T-Shirts', 'Shorts', 'Jeans', 'Accessories']
   });
 
-  const [products, setProducts] = useState([
-    { 
-      id: '1', 
-      name: 'Nike Joggers Summer 2026', 
-      type: 'Joggers', 
-      colours: 'Black, Grey, Olive',
-      coloursList: ['Black', 'Grey', 'Olive'], 
-      sizes: 'M, L, XL', 
-      sizesList: ['M', 'L', 'XL'],
-      image: null, 
-      stockData: {} 
-    }
-  ]);
-  const [dailySections, setDailySections] = useState([
-    { id: '1001', title: 'M size polos', image: null, markers: [] }
-  ]);
+  // Start with empty arrays — Firebase will populate immediately
+  const [products, setProducts] = useState([]);
+  const [dailySections, setDailySections] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   // Real-time Central Cloud Subscriptions
   useEffect(() => {
+    let productsLoaded = false;
+    let dailyLoaded = false;
+
+    const checkAllLoaded = () => {
+      if (productsLoaded && dailyLoaded) setLoading(false);
+    };
+
     const unsubProducts = subscribeProducts((cloudProducts) => {
-      if (cloudProducts && cloudProducts.length > 0) {
-        setProducts(cloudProducts);
-      }
+      // Always replace with cloud data (even empty array = real state from Firebase)
+      setProducts(cloudProducts || []);
+      productsLoaded = true;
+      checkAllLoaded();
     });
 
     const unsubDaily = subscribeDailySections((cloudSections) => {
-      if (cloudSections && cloudSections.length > 0) {
-        setDailySections(cloudSections);
-      }
+      setDailySections(cloudSections || []);
+      dailyLoaded = true;
+      checkAllLoaded();
     });
 
     const unsubSettings = subscribeSettings((cloudSettings) => {
-      if (cloudSettings) {
+      if (cloudSettings && Object.keys(cloudSettings).length > 0) {
         setSettings(prev => ({ ...prev, ...cloudSettings }));
       }
     });
+
+    // Safety timeout — if Firebase doesn't respond in 8s, stop loading spinner
+    const timeout = setTimeout(() => setLoading(false), 8000);
 
     return () => {
       unsubProducts();
       unsubDaily();
       unsubSettings();
+      clearTimeout(timeout);
     };
   }, []);
+
 
   const addProduct = (prod) => {
     setProducts(prev => [...prev, prod]);
@@ -749,16 +750,33 @@ export default function App() {
 
         {/* Content Area */}
         <main className="app-content">
-          <Routes>
-            <Route path="/" element={<ProductsList products={products} settings={settings} />} />
-            <Route path="/add-product" element={<AddProduct onAdd={addProduct} settings={settings} />} />
-            <Route path="/product/:id" element={<ProductUpdate products={products} updateProduct={updateProduct} settings={settings} />} />
-            
-            <Route path="/daily-updates" element={<DailyUpdatesList sections={dailySections} addSection={addDailySection} />} />
-            <Route path="/daily-updates/:id" element={<DailyUpdateDetail sections={dailySections} updateSection={updateDailySection} settings={settings} />} />
-            
-            <Route path="/settings" element={<SettingsPage settings={settings} updateSettings={updateSettings} />} />
-          </Routes>
+          {loading ? (
+            <div style={{
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              height: '100%', gap: '16px', color: 'var(--text-muted)'
+            }}>
+              <div style={{
+                width: '40px', height: '40px',
+                border: '3px solid var(--border)',
+                borderTopColor: 'var(--accent)',
+                borderRadius: '50%',
+                animation: 'spin 0.8s linear infinite'
+              }} />
+              <p style={{ fontWeight: 500 }}>Syncing data from cloud...</p>
+            </div>
+          ) : (
+            <Routes>
+              <Route path="/" element={<ProductsList products={products} settings={settings} />} />
+              <Route path="/add-product" element={<AddProduct onAdd={addProduct} settings={settings} />} />
+              <Route path="/product/:id" element={<ProductUpdate products={products} updateProduct={updateProduct} settings={settings} />} />
+              
+              <Route path="/daily-updates" element={<DailyUpdatesList sections={dailySections} addSection={addDailySection} />} />
+              <Route path="/daily-updates/:id" element={<DailyUpdateDetail sections={dailySections} updateSection={updateDailySection} settings={settings} />} />
+              
+              <Route path="/settings" element={<SettingsPage settings={settings} updateSettings={updateSettings} />} />
+            </Routes>
+          )}
         </main>
       </div>
     </Router>
