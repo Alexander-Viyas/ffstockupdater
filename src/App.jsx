@@ -363,7 +363,9 @@ function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
   const navigate = useNavigate();
   const product = products.find(p => p.id === id);
   const fileRef = useRef(null);
+  const mainImgRef = useRef(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingMain, setUploadingMain] = useState(false);
 
   if (!product) return <div className="page-body">Product not found.</div>;
 
@@ -390,20 +392,19 @@ function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
 
   const handleDeleteSize = (sizeToDelete, e) => {
     e.stopPropagation();
-    if (window.confirm(`Are you sure you want to delete size ${sizeToDelete}?`)) {
+    if (window.confirm(`Are you sure you want to delete size "${sizeToDelete}"?`)) {
       const newSizesList = product.sizesList.filter(s => s !== sizeToDelete);
       const newStockData = { ...product.stockData };
       delete newStockData[sizeToDelete];
-      
-      updateProduct(id, {
-        sizesList: newSizesList,
-        sizes: newSizesList.join(', '),
-        stockData: newStockData
-      });
-      
-      if (activeTab === sizeToDelete) {
-        setActiveTab(newSizesList[0] || 'Default');
-      }
+      updateProduct(id, { sizesList: newSizesList, sizes: newSizesList.join(', '), stockData: newStockData });
+      if (activeTab === sizeToDelete) setActiveTab(newSizesList[0] || 'Default');
+    }
+  };
+
+  const handleDeleteColour = (colourToDelete) => {
+    if (window.confirm(`Remove colour "${colourToDelete}"?`)) {
+      const newColoursList = product.coloursList.filter(c => c !== colourToDelete);
+      updateProduct(id, { coloursList: newColoursList, colours: newColoursList.join(', ') });
     }
   };
 
@@ -411,56 +412,118 @@ function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
     alert(`Stock updated and synced to central cloud for ${activeTab}!`);
   };
 
+  // Size-specific image upload
   const handleImgUpload = async (e) => {
     if (e.target.files[0]) {
       setUploading(true);
       try {
         const cloudUrl = await processAndUploadImage(e.target.files[0]);
-        handleSaveData({
-          ...currentData,
-          image: cloudUrl
-        });
-      } catch (err) {
-        console.error("Cloud image upload failed:", err);
-      } finally {
-        setUploading(false);
-      }
+        handleSaveData({ ...currentData, image: cloudUrl });
+      } catch (err) { console.error("Upload failed:", err); }
+      finally { setUploading(false); }
     }
   };
 
   const handleRemoveImage = () => {
-    if (window.confirm("Remove this image?")) {
+    if (window.confirm("Remove this size-specific image?")) {
       handleSaveData({ ...currentData, image: null });
+    }
+  };
+
+  // Main product cover image upload
+  const handleMainImgUpload = async (e) => {
+    if (e.target.files[0]) {
+      setUploadingMain(true);
+      try {
+        const cloudUrl = await processAndUploadImage(e.target.files[0]);
+        updateProduct(id, { image: cloudUrl });
+      } catch (err) { console.error("Upload failed:", err); }
+      finally { setUploadingMain(false); }
+    }
+  };
+
+  const handleRemoveMainImage = () => {
+    if (window.confirm("Remove the product cover image?")) {
+      updateProduct(id, { image: null });
     }
   };
 
   return (
     <div className="page-body" style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
         <div>
           <h2 style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-            <span style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => navigate('/')}>Products</span> 
-            <ChevronRight size={16}/> 
+            <span style={{ cursor: 'pointer', color: 'var(--text-muted)' }} onClick={() => navigate('/')}>Products</span>
+            <ChevronRight size={16}/>
             {product.name}
           </h2>
-          <p style={{ color: 'var(--text-muted)' }}>Select a size tab below to update its specific stock.</p>
+          <p style={{ color: 'var(--text-muted)' }}>Manage stock, sizes, colours and images for this product.</p>
         </div>
         <button className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleDeleteProduct}>
           <Trash2 size={16}/> Delete Product
         </button>
       </div>
-      
-      {/* Tabs for Sizes */}
+
+      {/* Main Cover Image Section */}
+      <div className="card" style={{ marginBottom: '20px', padding: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+          <span style={{ fontWeight: 600 }}>Product Cover Image</span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input type="file" ref={mainImgRef} style={{ display: 'none' }} accept="image/*" onChange={handleMainImgUpload} />
+            {uploadingMain ? (
+              <span style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading...</span>
+            ) : product.image ? (
+              <>
+                <button className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => mainImgRef.current?.click()}><ImageIcon size={14}/> Change</button>
+                <button className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.85rem', color: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={handleRemoveMainImage}><Trash2 size={14}/> Remove</button>
+              </>
+            ) : (
+              <button className="btn btn-outline" style={{ padding: '6px 12px', fontSize: '0.85rem' }} onClick={() => mainImgRef.current?.click()}><Upload size={14}/> Upload Cover</button>
+            )}
+          </div>
+        </div>
+        {product.image && (
+          <img src={product.image} alt={product.name} style={{ width: '100%', maxHeight: '160px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--border)' }} />
+        )}
+        {!product.image && (
+          <div style={{ height: '80px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', background: '#f8fafc', borderRadius: '8px', border: '1px dashed var(--border)' }}>
+            No cover image
+          </div>
+        )}
+      </div>
+
+      {/* Colours Section */}
+      {product.coloursList && product.coloursList.length > 0 && (
+        <div className="card" style={{ marginBottom: '20px', padding: '16px' }}>
+          <span style={{ fontWeight: 600, display: 'block', marginBottom: '12px' }}>Colours <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>(tap ✕ to remove)</span></span>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {product.coloursList.map(colour => (
+              <span key={colour} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#eff6ff', color: 'var(--accent)', borderRadius: '20px', padding: '4px 12px', fontWeight: 500, fontSize: '0.85rem', border: '1px solid #dbeafe' }}>
+                {colour}
+                <button
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', display: 'flex', alignItems: 'center', padding: 0, lineHeight: 1 }}
+                  onClick={() => handleDeleteColour(colour)}
+                >
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Size Tabs */}
       <div className="tabs">
         {(product.sizesList || ['Default']).map(size => (
-          <div 
-            key={size} 
+          <div
+            key={size}
             className={`tab-item ${activeTab === size ? 'active' : ''}`}
             onClick={() => setActiveTab(size)}
             style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
           >
             Size: {size}
-            <button 
+            <button
               style={{ background: 'none', border: 'none', color: activeTab === size ? 'white' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
               onClick={(e) => handleDeleteSize(size, e)}
             >
@@ -470,12 +533,13 @@ function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
         ))}
       </div>
 
+      {/* Size-specific image controls */}
       <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'flex-end', gap: '10px', flexWrap: 'wrap' }}>
         <input type="file" ref={fileRef} style={{ display: 'none' }} accept="image/*" onChange={handleImgUpload} />
         {uploading ? (
           <span style={{ color: 'var(--accent)', fontSize: '0.9rem' }}>Uploading image...</span>
         ) : !currentData.image ? (
-          <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Size Specific Image</button>
+          <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><Upload size={16}/> Upload Size Image</button>
         ) : (
           <>
             <button className="btn btn-outline" onClick={() => fileRef.current?.click()}><ImageIcon size={16}/> Change Image</button>
@@ -484,12 +548,12 @@ function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
         )}
       </div>
 
-      <TickerInterface 
+      <TickerInterface
         key={activeTab}
-        image={currentData.image} 
-        markers={currentData.markers || []} 
-        setMarkers={(m) => handleSaveData({ ...currentData, markers: m })} 
-        onSave={handleSaveClick} 
+        image={currentData.image}
+        markers={currentData.markers || []}
+        setMarkers={(m) => handleSaveData({ ...currentData, markers: m })}
+        onSave={handleSaveClick}
         title={`${activeTab} Variants`}
         markerStyle={settings.markerStyle}
         availableColours={product.coloursList}
