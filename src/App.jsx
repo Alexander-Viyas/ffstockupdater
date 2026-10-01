@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, u
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Package, PlusSquare, Calendar, Settings as SettingsIcon, Upload, Check, Plus, Minus, Trash2, Image as ImageIcon, ChevronRight 
+  Package, PlusSquare, Calendar, Settings as SettingsIcon, Upload, Check, Plus, Minus, Trash2, Image as ImageIcon, ChevronRight, Menu, X 
 } from 'lucide-react';
 
 // --- Reusable Ticker Interface ---
@@ -653,6 +653,7 @@ export default function App() {
   const [products, setProducts] = useState([]);
   const [dailySections, setDailySections] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [navOpen, setNavOpen] = useState(false);
 
   // Real-time Central Cloud Subscriptions
   useEffect(() => {
@@ -734,22 +735,42 @@ export default function App() {
   return (
     <Router>
       <div className="app-layout">
+        {/* Mobile overlay backdrop */}
+        {navOpen && (
+          <div
+            className="nav-overlay"
+            onClick={() => setNavOpen(false)}
+          />
+        )}
+
         {/* Navigation Sidebar */}
-        <nav className="app-nav">
-          <div className="nav-brand">FashionFusion</div>
+        <nav className={`app-nav${navOpen ? ' nav-open' : ''}`}>
+          <div className="nav-brand">
+            FashionFusion
+            <button className="nav-close-btn" onClick={() => setNavOpen(false)}>
+              <X size={20} />
+            </button>
+          </div>
           <div className="nav-links">
-            <NavLink to="/" icon={<Package size={18}/>}>Products List</NavLink>
-            <NavLink to="/add-product" icon={<PlusSquare size={18}/>}>Add Product</NavLink>
-            <NavLink to="/daily-updates" icon={<Calendar size={18}/>}>Daily Updates</NavLink>
+            <NavLink to="/" icon={<Package size={18}/>} onNavigate={() => setNavOpen(false)}>Products List</NavLink>
+            <NavLink to="/add-product" icon={<PlusSquare size={18}/>} onNavigate={() => setNavOpen(false)}>Add Product</NavLink>
+            <NavLink to="/daily-updates" icon={<Calendar size={18}/>} onNavigate={() => setNavOpen(false)}>Daily Updates</NavLink>
           </div>
           
           <div className="nav-links" style={{ flex: 'none', marginTop: 'auto' }}>
-            <NavLink to="/settings" icon={<SettingsIcon size={18}/>}>Settings</NavLink>
+            <NavLink to="/settings" icon={<SettingsIcon size={18}/>} onNavigate={() => setNavOpen(false)}>Settings</NavLink>
           </div>
         </nav>
 
         {/* Content Area */}
         <main className="app-content">
+          {/* Mobile Top Bar */}
+          <div className="mobile-topbar">
+            <button className="hamburger-btn" onClick={() => setNavOpen(true)}>
+              <Menu size={22} />
+            </button>
+            <span className="mobile-brand">FashionFusion</span>
+          </div>
           {loading ? (
             <div style={{
               display: 'flex', flexDirection: 'column',
@@ -783,11 +804,11 @@ export default function App() {
   );
 }
 
-function NavLink({ to, icon, children }) {
+function NavLink({ to, icon, children, onNavigate }) {
   const location = useLocation();
   const isActive = location.pathname === to || (to === '/' && location.pathname.startsWith('/product/')) || (to === '/daily-updates' && location.pathname.startsWith('/daily-updates/'));
   return (
-    <Link to={to} className={`nav-link ${isActive ? 'active' : ''}`}>
+    <Link to={to} className={`nav-link ${isActive ? 'active' : ''}`} onClick={onNavigate}>
       {icon} {children}
     </Link>
   );
