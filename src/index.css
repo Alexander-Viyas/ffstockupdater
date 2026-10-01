@@ -253,15 +253,17 @@ body {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  position: relative;
+  /* position: relative removed — image-wrapper inside handles positioning */
   min-height: 500px;
 }
 
-.image-area img {
+/* image-wrapper is the true positioning anchor for markers */
+.image-wrapper {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
   max-width: 100%;
   max-height: 100%;
-  object-fit: contain;
-  cursor: crosshair;
 }
 
 .side-panel {

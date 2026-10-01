@@ -66,13 +66,17 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
         {!image ? (
           <div style={{ color: 'var(--text-muted)' }}>No image provided</div>
         ) : (
-          <>
-            <img 
-              ref={imageRef} 
-              src={image} 
-              alt="Group" 
-              onClick={handleImageClick}
+          <div
+            ref={imageRef}
+            className="image-wrapper"
+            onClick={handleImageClick}
+            style={{ position: 'relative', display: 'inline-block', lineHeight: 0, cursor: 'crosshair' }}
+          >
+            <img
+              src={image}
+              alt="Group"
               draggable="false"
+              style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', userSelect: 'none', pointerEvents: 'none' }}
             />
             <AnimatePresence>
               {markers.map(marker => (
@@ -95,7 +99,7 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
                 </motion.div>
               ))}
             </AnimatePresence>
-          </>
+          </div>
         )}
       </div>
 
