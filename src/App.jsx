@@ -10,6 +10,33 @@ import {
 function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyle }) {
   const imageRef = useRef(null);
 
+  const [history, setHistory] = useState([markers]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  const pushHistory = (newMarkers) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(newMarkers);
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+    setMarkers(newMarkers);
+  };
+
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      setMarkers(history[newIndex]);
+    }
+  };
+
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      setMarkers(history[newIndex]);
+    }
+  };
+
   const handleImageClick = (e) => {
     if (e.target.closest('.marker')) return;
     if (!imageRef.current) return;
@@ -19,21 +46,21 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
     const areaNumber = markers.length + 1;
-    setMarkers([...markers, { id: uuidv4(), name: `Area ${areaNumber}`, qty: 1, x, y }]);
+    pushHistory([...markers, { id: uuidv4(), name: `Area ${areaNumber}`, qty: 1, x, y }]);
   };
 
   const handleIncrement = (id, e) => {
     if (e) e.stopPropagation();
-    setMarkers(markers.map(m => m.id === id ? { ...m, qty: m.qty + 1 } : m));
+    pushHistory(markers.map(m => m.id === id ? { ...m, qty: m.qty + 1 } : m));
   };
 
   const handleDecrement = (id, e) => {
     if (e) e.stopPropagation();
-    setMarkers(markers.map(m => m.id === id && m.qty > 0 ? { ...m, qty: m.qty - 1 } : m));
+    pushHistory(markers.map(m => m.id === id && m.qty > 0 ? { ...m, qty: m.qty - 1 } : m));
   };
 
   const handleDelete = (id) => {
-    setMarkers(markers.filter(m => m.id !== id));
+    pushHistory(markers.filter(m => m.id !== id));
   };
 
   const total = markers.reduce((sum, m) => sum + m.qty, 0);
@@ -61,10 +88,22 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
                 <motion.div
                   key={marker.id}
                   initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
+                  animate={{ scale: 1, x: 0, y: 0 }}
                   exit={{ scale: 0 }}
                   className="marker"
                   style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
+                  drag
+                  dragMomentum={false}
+                  onDragEnd={(event, info) => {
+                    if (Math.abs(info.offset.x) < 2 && Math.abs(info.offset.y) < 2) return;
+                    if (imageRef.current) {
+                      const rect = imageRef.current.getBoundingClientRect();
+                      const newX = marker.x + (info.offset.x / rect.width) * 100;
+                      const newY = marker.y + (info.offset.y / rect.height) * 100;
+                      pushHistory(markers.map(m => m.id === marker.id ? { ...m, x: newX, y: newY } : m));
+                    }
+                  }}
+                  whileDrag={{ scale: 1.1, cursor: "grabbing" }}
                 >
                   {markerStyle === 'numbers' ? (
                     <div className="marker-pin marker-pin--counter">
@@ -102,7 +141,11 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
       <div className="side-panel">
         <div className="panel-header">
           <span>{title || 'Areas'}</span>
-          <span className="badge">Total: {total}</span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={handleUndo} disabled={historyIndex === 0}>Undo</button>
+            <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: '0.8rem' }} onClick={handleRedo} disabled={historyIndex === history.length - 1}>Redo</button>
+            <span className="badge">Total: {total}</span>
+          </div>
         </div>
         <div className="panel-body">
           {markers.length === 0 ? (
@@ -290,7 +333,12 @@ function ProductsList({ products, settings, deleteProduct }) {
                 <button
                   className="btn"
                   style={{ position: 'absolute', top: '10px', right: '10px', background: 'white', color: 'var(--danger)', padding: '8px', borderRadius: '50%', zIndex: 10, boxShadow: 'var(--shadow)', border: '1px solid var(--danger)' }}
-                  onClick={(e) => { e.stopPropagation(); deleteProduct(p.id); }}
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if (window.confirm("Are you sure you want to completely delete this product?")) {
+                      deleteProduct(p.id); 
+                    }
+                  }}
                 >
                   <Trash2 size={18} />
                 </button>
