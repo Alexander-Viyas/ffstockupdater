@@ -3,46 +3,23 @@ import { BrowserRouter as Router, Routes, Route, Link, useNavigate, useParams, u
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Package, PlusSquare, Calendar, Settings as SettingsIcon, Upload, Check, Plus, Minus, Trash2, Image as ImageIcon, ChevronRight, Menu, X 
+  Package, PlusSquare, Calendar, Settings as SettingsIcon, Upload, Check, Plus, Minus, Trash2, Image as ImageIcon, ChevronRight, Menu, X, Search, SlidersHorizontal
 } from 'lucide-react';
 
 // --- Reusable Ticker Interface ---
-function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyle, availableColours }) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentClick, setCurrentClick] = useState(null);
-  
-  // Custom variant toggle
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const [customVariantName, setCustomVariantName] = useState('');
-  
+function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyle }) {
   const imageRef = useRef(null);
 
   const handleImageClick = (e) => {
     if (e.target.closest('.marker')) return;
     if (!imageRef.current) return;
-    
+
     const rect = imageRef.current.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
 
-    setCurrentClick({ x, y });
-    
-    // Reset modal state
-    setCustomVariantName('');
-    setShowCustomInput(!availableColours || availableColours.length === 0);
-    setIsModalOpen(true);
-  };
-
-  const handleAddPredefinedVariant = (colour) => {
-    setMarkers([...markers, { id: uuidv4(), name: colour, qty: 1, x: currentClick.x, y: currentClick.y }]);
-    setIsModalOpen(false);
-  };
-
-  const handleAddCustomVariant = (e) => {
-    e.preventDefault();
-    if (!customVariantName.trim()) return;
-    setMarkers([...markers, { id: uuidv4(), name: customVariantName, qty: 1, x: currentClick.x, y: currentClick.y }]);
-    setIsModalOpen(false);
+    const areaNumber = markers.length + 1;
+    setMarkers([...markers, { id: uuidv4(), name: `Area ${areaNumber}`, qty: 1, x, y }]);
   };
 
   const handleIncrement = (id, e) => {
@@ -50,7 +27,8 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
     setMarkers(markers.map(m => m.id === id ? { ...m, qty: m.qty + 1 } : m));
   };
 
-  const handleDecrement = (id) => {
+  const handleDecrement = (id, e) => {
+    if (e) e.stopPropagation();
     setMarkers(markers.map(m => m.id === id && m.qty > 0 ? { ...m, qty: m.qty - 1 } : m));
   };
 
@@ -87,12 +65,30 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
                   exit={{ scale: 0 }}
                   className="marker"
                   style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
-                  onClick={(e) => handleIncrement(marker.id, e)}
-                  title="Click to add +1"
                 >
-                  <div className="marker-pin">
-                    {markerStyle === 'numbers' ? marker.qty : <Check size={20} />}
-                  </div>
+                  {markerStyle === 'numbers' ? (
+                    <div className="marker-pin marker-pin--counter">
+                      <button
+                        className="marker-mini-btn"
+                        onClick={(e) => handleDecrement(marker.id, e)}
+                        title="Decrease"
+                      >−</button>
+                      <span className="marker-count">{marker.qty}</span>
+                      <button
+                        className="marker-mini-btn"
+                        onClick={(e) => handleIncrement(marker.id, e)}
+                        title="Increase"
+                      >+</button>
+                    </div>
+                  ) : (
+                    <div
+                      className="marker-pin"
+                      onClick={(e) => handleIncrement(marker.id, e)}
+                      title="Click to add +1"
+                    >
+                      <Check size={20} />
+                    </div>
+                  )}
                   <div className="marker-tooltip">
                     {marker.name} • Qty: {marker.qty}
                   </div>
@@ -105,27 +101,37 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
 
       <div className="side-panel">
         <div className="panel-header">
-          <span>{title || 'Variants'}</span>
+          <span>{title || 'Areas'}</span>
           <span className="badge">Total: {total}</span>
         </div>
         <div className="panel-body">
           {markers.length === 0 ? (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '20px' }}>
-              <p>Click on the image to add variants.</p>
+              <p>Click on the image to mark an area.</p>
             </div>
           ) : (
             markers.map(marker => (
               <div key={marker.id} className="variant-item">
                 <div className="variant-info">
                   <span className="variant-name">{marker.name}</span>
-                  <span className="variant-qty">Qty: {marker.qty}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button onClick={() => handleDecrement(marker.id)} style={{ padding: '4px', cursor: 'pointer' }}><Minus size={14}/></button>
-                  <span>{marker.qty}</span>
-                  <button onClick={(e) => handleIncrement(marker.id, e)} style={{ padding: '4px', cursor: 'pointer' }}><Plus size={14}/></button>
-                  <button onClick={() => handleDelete(marker.id)} style={{ color: 'red', border: 'none', background: 'none', cursor: 'pointer', marginLeft: '10px' }}>
-                    <Trash2 size={16}/>
+                <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                  <button
+                    className="qty-btn"
+                    onClick={() => handleDecrement(marker.id)}
+                    title="Decrease"
+                  ><Minus size={12}/></button>
+                  <span className="qty-count">{marker.qty}</span>
+                  <button
+                    className="qty-btn"
+                    onClick={(e) => handleIncrement(marker.id, e)}
+                    title="Increase"
+                  ><Plus size={12}/></button>
+                  <button
+                    onClick={() => handleDelete(marker.id)}
+                    style={{ color: 'var(--danger)', border: 'none', background: 'none', cursor: 'pointer', marginLeft: '8px', display: 'flex', alignItems: 'center' }}
+                  >
+                    <Trash2 size={15}/>
                   </button>
                 </div>
               </div>
@@ -138,58 +144,6 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
           </button>
         </div>
       </div>
-
-      {isModalOpen && (
-        <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && setIsModalOpen(false)}>
-          <div className="modal-content">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3>Select Variant</h3>
-              <button className="btn-outline" style={{ padding: '4px 8px', border: 'none' }} onClick={() => setIsModalOpen(false)}>✕</button>
-            </div>
-            
-            {availableColours && availableColours.length > 0 && !showCustomInput && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Choose a pre-defined colour:</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                  {availableColours.map(c => (
-                    <button key={c} type="button" className="btn btn-outline" onClick={() => handleAddPredefinedVariant(c)}>
-                      {c}
-                    </button>
-                  ))}
-                </div>
-                
-                <div style={{ margin: '15px 0', borderTop: '1px solid var(--border)' }}></div>
-                
-                <button type="button" className="btn btn-secondary" style={{ width: '100%', background: 'transparent', border: '1px dashed var(--accent)', color: 'var(--accent)' }} onClick={() => setShowCustomInput(true)}>
-                  + Add Custom Variant
-                </button>
-              </div>
-            )}
-
-            {showCustomInput && (
-              <form onSubmit={handleAddCustomVariant}>
-                <div className="form-group">
-                  <label>Variant Name</label>
-                  <input 
-                    type="text" 
-                    className="form-control"
-                    value={customVariantName}
-                    onChange={(e) => setCustomVariantName(e.target.value)}
-                    autoFocus
-                    placeholder="e.g. Special Blue"
-                  />
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-                  {availableColours && availableColours.length > 0 && (
-                    <button type="button" className="btn btn-outline" onClick={() => setShowCustomInput(false)}>Back</button>
-                  )}
-                  <button type="submit" className="btn btn-primary">Add</button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -200,14 +154,36 @@ function TickerInterface({ image, markers, setMarkers, onSave, title, markerStyl
 function ProductsList({ products, settings, deleteProduct }) {
   const navigate = useNavigate();
   const [isDeleteMode, setIsDeleteMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterSize, setFilterSize] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Collect all unique sizes across all products for the size filter
+  const allSizes = [...new Set(products.flatMap(p => p.sizesList || []))].sort();
+  const allTypes = [...new Set(products.map(p => p.type).filter(Boolean))].sort();
+
+  const filtered = products.filter(p => {
+    const q = searchQuery.toLowerCase();
+    const matchesSearch = !q || p.name.toLowerCase().includes(q);
+    const matchesType = !filterType || p.type === filterType;
+    const matchesSize = !filterSize || (p.sizesList || []).includes(filterSize);
+    return matchesSearch && matchesType && matchesSize;
+  });
+
+  const activeFilterCount = [filterType, filterSize].filter(Boolean).length;
+
+  const clearFilters = () => { setFilterType(''); setFilterSize(''); setSearchQuery(''); };
+
   return (
     <div className="page-body">
-      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '20px' }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px', marginBottom: '16px' }}>
         <h2>All Products</h2>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button 
-            className="btn btn-outline" 
-            style={{ color: isDeleteMode ? 'var(--text)' : 'var(--danger)', borderColor: isDeleteMode ? 'var(--border)' : 'var(--danger)' }} 
+          <button
+            className="btn btn-outline"
+            style={{ color: isDeleteMode ? 'var(--text)' : 'var(--danger)', borderColor: isDeleteMode ? 'var(--border)' : 'var(--danger)' }}
             onClick={() => setIsDeleteMode(!isDeleteMode)}
           >
             {isDeleteMode ? 'Done' : <><Trash2 size={16}/> Delete</>}
@@ -215,23 +191,106 @@ function ProductsList({ products, settings, deleteProduct }) {
           <Link to="/add-product" className="btn btn-primary"><Plus size={18}/> Add Product</Link>
         </div>
       </div>
+
+      {/* Search + Filter bar */}
+      <div className="search-filter-bar">
+        <div className="search-input-wrap">
+          <Search size={16} className="search-icon" />
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Search products by name..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+          />
+          {searchQuery && (
+            <button className="search-clear" onClick={() => setSearchQuery('')}>
+              <X size={14}/>
+            </button>
+          )}
+        </div>
+        <button
+          className={`btn btn-outline filter-toggle-btn ${showFilters ? 'active' : ''}`}
+          onClick={() => setShowFilters(v => !v)}
+        >
+          <SlidersHorizontal size={16}/>
+          Filters
+          {activeFilterCount > 0 && <span className="filter-badge">{activeFilterCount}</span>}
+        </button>
+      </div>
+
+      {/* Collapsible filter panel */}
+      {showFilters && (
+        <div className="filter-panel">
+          <div className="filter-group">
+            <label className="filter-label">Product Type</label>
+            <select
+              className="filter-select"
+              value={filterType}
+              onChange={e => setFilterType(e.target.value)}
+            >
+              <option value="">All Types</option>
+              {allTypes.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+          </div>
+          <div className="filter-group">
+            <label className="filter-label">Size</label>
+            <select
+              className="filter-select"
+              value={filterSize}
+              onChange={e => setFilterSize(e.target.value)}
+            >
+              <option value="">All Sizes</option>
+              {allSizes.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          {activeFilterCount > 0 && (
+            <button className="btn btn-outline" style={{ alignSelf: 'flex-end', fontSize: '0.85rem', padding: '6px 12px' }} onClick={clearFilters}>
+              Clear All
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Active filter chips */}
+      {(filterType || filterSize) && (
+        <div className="filter-chips">
+          {filterType && (
+            <span className="filter-chip">
+              Type: {filterType}
+              <button onClick={() => setFilterType('')}><X size={12}/></button>
+            </span>
+          )}
+          {filterSize && (
+            <span className="filter-chip">
+              Size: {filterSize}
+              <button onClick={() => setFilterSize('')}><X size={12}/></button>
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Results info */}
+      {(searchQuery || filterType || filterSize) && (
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
+          {filtered.length} result{filtered.length !== 1 ? 's' : ''} found
+        </p>
+      )}
+
       <div className="grid-3">
-        {products.map(p => {
-          const totalStock = p.sizesList.reduce((sum, size) => {
-            const markers = p.stockData[size]?.markers || [];
+        {filtered.map(p => {
+          const totalStock = (p.sizesList || []).reduce((sum, size) => {
+            const markers = p.stockData?.[size]?.markers || [];
             return sum + markers.reduce((acc, m) => acc + m.qty, 0);
           }, 0);
 
           return (
             <div key={p.id} className="card card-clickable" style={{ position: 'relative' }} onClick={() => navigate(`/product/${p.id}`)}>
               {isDeleteMode && (
-                <button 
-                  className="btn" 
+                <button
+                  className="btn"
                   style={{ position: 'absolute', top: '10px', right: '10px', background: 'white', color: 'var(--danger)', padding: '8px', borderRadius: '50%', zIndex: 10, boxShadow: 'var(--shadow)', border: '1px solid var(--danger)' }}
-                  onClick={(e) => {
-                     e.stopPropagation();
-                     deleteProduct(p.id);
-                  }}
+                  onClick={(e) => { e.stopPropagation(); deleteProduct(p.id); }}
                 >
                   <Trash2 size={18} />
                 </button>
@@ -245,7 +304,7 @@ function ProductsList({ products, settings, deleteProduct }) {
               )}
               <h3 style={{ marginBottom: '10px' }}>{p.name}</h3>
               {p.type && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '4px' }}>Type: {p.type}</p>}
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{p.colours} colours, {p.sizes}</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Sizes: {p.sizes}</p>
               <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span className="badge">{totalStock} in stock</span>
                 <span style={{ color: 'var(--accent)' }}><ChevronRight size={20}/></span>
@@ -253,8 +312,14 @@ function ProductsList({ products, settings, deleteProduct }) {
             </div>
           );
         })}
-        {products.length === 0 && (
-          <p style={{ color: 'var(--text-muted)' }}>No products yet. Add a new product to get started.</p>
+        {filtered.length === 0 && (
+          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+            <Search size={36} style={{ opacity: 0.3, marginBottom: '12px' }} />
+            <p style={{ fontWeight: 500 }}>{products.length === 0 ? 'No products yet. Add a new product to get started.' : 'No products match your search or filters.'}</p>
+            {(searchQuery || filterType || filterSize) && products.length > 0 && (
+              <button className="btn btn-outline" style={{ marginTop: '12px', fontSize: '0.85rem' }} onClick={clearFilters}>Clear Filters</button>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -273,11 +338,10 @@ function AddProduct({ onAdd, settings }) {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [type, setType] = useState(settings.productTypes[0] || 'Joggers');
-  const [colours, setColours] = useState('');
   const [sizes, setSizes] = useState('');
   const [image, setImage] = useState(null);
   const [uploading, setUploading] = useState(false);
-  
+
   const handleImage = async (e) => {
     if (e.target.files[0]) {
       setUploading(true);
@@ -295,20 +359,16 @@ function AddProduct({ onAdd, settings }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const sizesList = sizes.split(',').map(s => s.trim()).filter(s => s.length > 0);
-    const coloursList = colours.split(',').map(c => c.trim()).filter(c => c.length > 0);
-    
     if (sizesList.length === 0) sizesList.push('Default');
 
-    onAdd({ 
-      id: uuidv4(), 
-      name, 
-      type, 
-      colours: coloursList.join(', '), 
-      coloursList,
-      sizes: sizesList.join(', '), 
+    onAdd({
+      id: uuidv4(),
+      name,
+      type,
+      sizes: sizesList.join(', '),
       sizesList,
-      image, 
-      stockData: {} 
+      image,
+      stockData: {}
     });
     navigate('/');
   };
@@ -321,11 +381,11 @@ function AddProduct({ onAdd, settings }) {
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label>Product Name</label>
-            <input type="text" className="form-control" required value={name} onChange={e=>setName(e.target.value)}/>
+            <input type="text" className="form-control" required value={name} onChange={e => setName(e.target.value)}/>
           </div>
           <div className="form-group">
             <label>Product Type</label>
-            <select className="form-control" value={type} onChange={e=>setType(e.target.value)}>
+            <select className="form-control" value={type} onChange={e => setType(e.target.value)}>
               {settings.productTypes.map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
@@ -333,12 +393,8 @@ function AddProduct({ onAdd, settings }) {
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>Manage product types in Settings.</p>
           </div>
           <div className="form-group">
-            <label>Available Colours (comma separated)</label>
-            <input type="text" className="form-control" value={colours} onChange={e=>setColours(e.target.value)} placeholder="e.g. Red, Blue, Green"/>
-          </div>
-          <div className="form-group">
             <label>Available Sizes (comma separated)</label>
-            <input type="text" className="form-control" required value={sizes} onChange={e=>setSizes(e.target.value)} placeholder="e.g. S, M, L, XL"/>
+            <input type="text" className="form-control" required value={sizes} onChange={e => setSizes(e.target.value)} placeholder="e.g. S, M, L, XL"/>
           </div>
           <div className="form-group">
             <label>Base Group Picture (Optional)</label>
@@ -493,25 +549,7 @@ function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
         )}
       </div>
 
-      {/* Colours Section */}
-      {product.coloursList && product.coloursList.length > 0 && (
-        <div className="card" style={{ marginBottom: '20px', padding: '16px' }}>
-          <span style={{ fontWeight: 600, display: 'block', marginBottom: '12px' }}>Colours <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: '0.85rem' }}>(tap ✕ to remove)</span></span>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {product.coloursList.map(colour => (
-              <span key={colour} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#eff6ff', color: 'var(--accent)', borderRadius: '20px', padding: '4px 12px', fontWeight: 500, fontSize: '0.85rem', border: '1px solid #dbeafe' }}>
-                {colour}
-                <button
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', display: 'flex', alignItems: 'center', padding: 0, lineHeight: 1 }}
-                  onClick={() => handleDeleteColour(colour)}
-                >
-                  <X size={13} />
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+
 
       {/* Size Tabs */}
       <div className="tabs">
@@ -554,9 +592,8 @@ function ProductUpdate({ products, updateProduct, settings, deleteProduct }) {
         markers={currentData.markers || []}
         setMarkers={(m) => handleSaveData({ ...currentData, markers: m })}
         onSave={handleSaveClick}
-        title={`${activeTab} Variants`}
+        title={`${activeTab} Areas`}
         markerStyle={settings.markerStyle}
-        availableColours={product.coloursList}
       />
     </div>
   );
@@ -660,14 +697,13 @@ function DailyUpdateDetail({ sections, updateSection, settings }) {
       </div>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <TickerInterface 
+        <TickerInterface
           image={section.image}
           markers={section.markers || []}
           setMarkers={(m) => updateSection(id, { markers: m })}
           onSave={handleSave}
           title={section.title}
           markerStyle={settings.markerStyle}
-          availableColours={[]} 
         />
       </div>
     </div>
